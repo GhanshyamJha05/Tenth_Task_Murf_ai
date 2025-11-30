@@ -1,91 +1,45 @@
+import { AccessToken } from 'livekit-server-sdk';
 import { NextResponse } from 'next/server';
-import { AccessToken, type AccessTokenOptions, type VideoGrant } from 'livekit-server-sdk';
-import { RoomConfiguration } from '@livekit/protocol';
 
-type ConnectionDetails = {
-  serverUrl: string;
-  roomName: string;
-  participantName: string;
-  participantToken: string;
-};
-
-// NOTE: you are expected to define the following environment variables in `.env.local`:
-const API_KEY = process.env.LIVEKIT_API_KEY;
-const API_SECRET = process.env.LIVEKIT_API_SECRET;
-const LIVEKIT_URL = process.env.LIVEKIT_URL;
-
-// don't cache the results
-export const revalidate = 0;
-
-export async function POST(req: Request) {
+export async function GET() {
   try {
-    if (LIVEKIT_URL === undefined) {
-      throw new Error('LIVEKIT_URL is not defined');
+    const roomName = `improv_battle_${Math.random().toString(36).substring(7)}`;
+    const participantName = `player_${Math.random().toString(36).substring(7)}`;
+
+    const apiKey = process.env.LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL || 'ws://localhost:7880';
+
+    if (!apiKey || !apiSecret) {
+      return NextResponse.json(
+        { error: 'LiveKit API credentials not configured' },
+        { status: 500 }
+      );
     }
-    if (API_KEY === undefined) {
-      throw new Error('LIVEKIT_API_KEY is not defined');
-    }
-    if (API_SECRET === undefined) {
-      throw new Error('LIVEKIT_API_SECRET is not defined');
-    }
 
-    // Parse agent configuration from request body
-    const body = await req.json();
-    const agentName: string = body?.room_config?.agents?.[0]?.agent_name;
-
-    // Generate participant token
-    const participantName = 'user';
-    const participantIdentity = `voice_assistant_user_${Math.floor(Math.random() * 10_000)}`;
-    const roomName = `voice_assistant_room_${Math.floor(Math.random() * 10_000)}`;
-
-    const participantToken = await createParticipantToken(
-      { identity: participantIdentity, name: participantName },
-      roomName,
-      agentName
-    );
-
-    // Return connection details
-    const data: ConnectionDetails = {
-      serverUrl: LIVEKIT_URL,
-      roomName,
-      participantToken: participantToken,
-      participantName,
-    };
-    const headers = new Headers({
-      'Cache-Control': 'no-store',
+    const token = new AccessToken(apiKey, apiSecret, {
+      identity: participantName,
+      name: participantName,
     });
-    return NextResponse.json(data, { headers });
+
+    token.addGrant({
+      room: roomName,
+      roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+    });
+
+    return NextResponse.json({
+      serverUrl: livekitUrl,
+      roomName: roomName,
+      participantToken: await token.toJwt(),
+      participantName: participantName,
+    });
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(error);
-      return new NextResponse(error.message, { status: 500 });
-    }
+    console.error('Error generating connection details:', error);
+    return NextResponse.json(
+      { error: 'Failed to generate connection details' },
+      { status: 500 }
+    );
   }
-}
-
-function createParticipantToken(
-  userInfo: AccessTokenOptions,
-  roomName: string,
-  agentName?: string
-): Promise<string> {
-  const at = new AccessToken(API_KEY, API_SECRET, {
-    ...userInfo,
-    ttl: '15m',
-  });
-  const grant: VideoGrant = {
-    room: roomName,
-    roomJoin: true,
-    canPublish: true,
-    canPublishData: true,
-    canSubscribe: true,
-  };
-  at.addGrant(grant);
-
-  if (agentName) {
-    at.roomConfig = new RoomConfiguration({
-      agents: [{ agentName }],
-    });
-  }
-
-  return at.toJwt();
 }

@@ -6,8 +6,6 @@ import type { AppConfig } from '@/app-config';
 import { ChatTranscript } from '@/components/app/chat-transcript';
 import { PreConnectMessage } from '@/components/app/preconnect-message';
 import { TileLayout } from '@/components/app/tile-layout';
-import { ProductCatalog } from '@/components/app/product-catalog';
-import { ShopCart } from '@/components/app/shop-cart';
 import {
   AgentControlBar,
   type ControlBarControls,
